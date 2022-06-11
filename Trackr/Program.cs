@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using Trackr.Configurations;
 using Trackr.Data;
+using Trackr.Extensions;
 using Trackr.Interfaces;
 using Trackr.Repository;
+using Trackr.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
 
 builder.Services.AddDbContext<DataContext>(options =>
 {
@@ -16,7 +17,10 @@ builder.Services.AddDbContext<DataContext>(options =>
 });
 builder.Services.AddControllers();
 
+#region Identity Configuration
+
 builder.Services.AddDefaultIdentity<User>(options => options.SignIn.RequireConfirmedAccount = false)
+    .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<DataContext>().AddDefaultTokenProviders();
 
 builder.Services.Configure<IdentityOptions>(options =>
@@ -56,6 +60,10 @@ builder.Services.Configure<IdentityOptions>(options =>
 //        .Build();
 //});
 
+#endregion
+
+builder.Services.ConfigureJWT(builder.Configuration);
+
 builder.Services.AddCors(o =>
 {
     o.AddPolicy("AllowAll", builder =>
@@ -68,10 +76,12 @@ builder.Services.AddAutoMapper(typeof(MapperInitializer));
 
 // AddTransient: New instance every time it's needed
 builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
+// AddScoped: Same within a request, different across different requests
+builder.Services.AddScoped<IAuthManager, AuthManager>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.ConfigureSwaggerDoc();
 
 var app = builder.Build();
 

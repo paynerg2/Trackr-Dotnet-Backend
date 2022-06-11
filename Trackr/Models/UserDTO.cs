@@ -16,5 +16,7 @@ namespace Trackr.Models
 
         [Required]
         public string Password { get; set; }
+
+        public ICollection<string> Roles { get; set; }
     }
 }

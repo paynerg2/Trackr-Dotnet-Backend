@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Trackr.Configurations.Entities;
 
 namespace Trackr.Data
 {
@@ -13,9 +14,9 @@ namespace Trackr.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.Email)
-                    .IsUnique();
+            modelBuilder.ApplyConfiguration(new RoleConfiguration());
+
+            modelBuilder.ApplyConfiguration(new UserConfiguration());
         }
 
         public DbSet<Application> Applications { get; set; }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Trackr.Data;
+using Trackr.Interfaces;
 using Trackr.Models;
 
 namespace Trackr.Controllers
@@ -14,13 +15,15 @@ namespace Trackr.Controllers
         private readonly UserManager<User> _userManager;
         private readonly ILogger<AccountController> _logger;
         private readonly IMapper _mapper;
+        private readonly IAuthManager _authManager;
 
         public AccountController(UserManager<User> userManager,
-            ILogger<AccountController> logger, IMapper mapper)
+            ILogger<AccountController> logger, IMapper mapper, IAuthManager authManager)
         {
             _userManager = userManager;
             _logger = logger;
             _mapper = mapper;
+            _authManager = authManager;
         }
 
         [HttpPost]
@@ -42,7 +45,7 @@ namespace Trackr.Controllers
                 var user = _mapper.Map<User>(userDTO);
                 user.UserName = userDTO.Email;
                 // Automatically hashes and stores password, etc.
-                var result = await _userManager.CreateAsync(user);
+                var result = await _userManager.CreateAsync(user, userDTO.Password);
 
                 if(!result.Succeeded)
                 {
@@ -53,6 +56,8 @@ namespace Trackr.Controllers
                     // TODO: Probably check for and send useful information to the user, e.g. "Failed because email is already taken"
                     return BadRequest(ModelState);
                 }
+
+                await _userManager.AddToRolesAsync(user, userDTO.Roles);
 
                 return Accepted();
             }
@@ -67,6 +72,7 @@ namespace Trackr.Controllers
         [Route("login")]
         [ProducesResponseType(StatusCodes.Status202Accepted)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> Login([FromBody] LoginUserDTO userDTO)
         {
@@ -79,15 +85,12 @@ namespace Trackr.Controllers
 
             try
             {
-                //var result = await _signInManager.PasswordSignInAsync(userDTO.Email, userDTO.Password,
-                //    isPersistent: false, lockoutOnFailure: false);
+                if (!await _authManager.ValidateUser(userDTO))
+                {
+                    return Unauthorized();
+                }
 
-                //if (!result.Succeeded)
-                //{
-                //    return Unauthorized(userDTO);
-                //}
-
-                return Accepted();
+                return Accepted(new { Token = await _authManager.CreateToken() });
 
             }
             catch (Exception ex)
