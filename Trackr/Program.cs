@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Trackr.ActionFilters;
 using Trackr.Configurations;
 using Trackr.Data;
 using Trackr.Extensions;
@@ -15,6 +16,7 @@ builder.Services.AddDbContext<DataContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
+builder.Services.AddScoped<ValidationFilterAttribute>();
 builder.Services.AddControllers();
 
 #region Identity Configuration
@@ -91,6 +93,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+var logger = app.Services.GetRequiredService<ILogger>();
+app.ConfigureExceptionHandler(logger);
 
 //app.UseHttpsRedirection();
 

@@ -1,5 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Trackr.ActionFilters;
+using Trackr.Data;
+using Trackr.Interfaces;
 using Trackr.Models;
 
 namespace Trackr.Controllers
@@ -8,125 +12,110 @@ namespace Trackr.Controllers
     [ApiController]
     public class InterviewsController : ControllerBase
     {
-        private readonly DataContext _context;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ILogger<InterviewsController> _logger;
+        private readonly IMapper _mapper;
 
-        public InterviewsController(DataContext context)
+        private const string GetInterviewRouteName = "GetInterview";
+
+        public InterviewsController(IUnitOfWork unitOfWork, ILogger<InterviewsController> logger, IMapper mapper)
         {
-            _context = context;
+            _unitOfWork = unitOfWork;
+            _logger = logger;
+            _mapper = mapper;
         }
 
-        // GET: api/Interviews
+        [Authorize]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Interview>>> GetInterviews()
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetInterviews()
         {
-          if (_context.Interviews == null)
-          {
-              return NotFound();
-          }
-            return await _context.Interviews.ToListAsync();
+            var interviews = await _unitOfWork.Interviews.GetAll();
+            var result = _mapper.Map<List<InterviewDTO>>(interviews);
+            return Ok(result);
         }
 
-        // GET: api/Interviews/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Interview>> GetInterview(string id)
+        [Authorize]
+        [HttpGet("{id}", Name = GetInterviewRouteName)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetInterview(string id)
         {
-          if (_context.Interviews == null)
-          {
-              return NotFound();
-          }
-            var interview = await _context.Interviews.FindAsync(id);
+            var interview = await _unitOfWork.Interviews.Get(i => i.Id == id);
+            var result = _mapper.Map<List<InterviewDTO>>(interview);
+            return Ok(result);
+        }
 
+        [Authorize]
+        [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateInterview([FromBody] CreateInterviewDTO interviewDTO)
+        {
+            if (!ModelState.IsValid)
+            {
+                _logger.LogError($"Invalid POST attempt in {nameof(CreateInterview)})");
+                return BadRequest(ModelState);
+            }
+
+            var interview = _mapper.Map<Interview>(interviewDTO);
+            await _unitOfWork.Interviews.Insert(interview);
+            await _unitOfWork.Save();
+
+            return CreatedAtRoute(GetInterviewRouteName, new { id = interview.Id }, interview);
+        }
+
+        [Authorize]
+        [HttpPut("{id}")]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateInterview(string id, [FromBody] UpdateInterviewDTO interviewDTO)
+        {
+            if (!ModelState.IsValid || String.IsNullOrEmpty(id))
+            {
+                return BadRequest(ModelState);
+            }
+
+            var interview = await _unitOfWork.Interviews.Get(i => i.Id == id);
             if (interview == null)
             {
-                return NotFound();
+                return BadRequest("Interview not found.");
             }
 
-            return interview;
+            interview = _mapper.Map<Interview>(interviewDTO);
+            _unitOfWork.Interviews.Update(interview);
+            await _unitOfWork.Save();
+
+            return Accepted(interview);
         }
 
-        // PUT: api/Interviews/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutInterview(string id, Interview interview)
-        {
-            if (id != interview.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(interview).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!InterviewExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        // POST: api/Interviews
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Interview>> PostInterview(Interview interview)
-        {
-          if (_context.Interviews == null)
-          {
-              return Problem("Entity set 'DataContext.Interviews'  is null.");
-          }
-            _context.Interviews.Add(interview);
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                if (InterviewExists(interview.Id))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return CreatedAtAction(nameof(GetInterview), new { id = interview.Id }, interview);
-        }
-
-        // DELETE: api/Interviews/5
+        [Authorize]
         [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteInterview(string id)
         {
-            if (_context.Interviews == null)
+            if (String.IsNullOrEmpty(id))
             {
-                return NotFound();
+                _logger.LogError($"Error in {nameof(DeleteInterview)}");
+                return BadRequest("ID value cannot be empty.");
             }
-            var interview = await _context.Interviews.FindAsync(id);
+
+            var interview = await _unitOfWork.Interviews.Get(i => i.Id == id);
             if (interview == null)
             {
-                return NotFound();
+                _logger.LogError($"Error in {nameof(DeleteInterview)}");
+                return BadRequest("Interview not found.");
             }
 
-            _context.Interviews.Remove(interview);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.Interviews.Delete(id);
+            await _unitOfWork.Save();
 
             return NoContent();
-        }
-
-        private bool InterviewExists(string id)
-        {
-            return (_context.Interviews?.Any(e => e.Id == id)).GetValueOrDefault();
         }
     }
 }

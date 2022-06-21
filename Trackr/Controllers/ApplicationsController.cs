@@ -1,5 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Trackr.Data;
+using Trackr.Interfaces;
 using Trackr.Models;
 
 namespace Trackr.Controllers
@@ -8,125 +12,111 @@ namespace Trackr.Controllers
     [ApiController]
     public class ApplicationsController : ControllerBase
     {
-        private readonly DataContext _context;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ILogger<ApplicationsController> _logger;
+        private readonly IMapper _mapper;
 
-        public ApplicationsController(DataContext context)
+        private const string GetApplicationRouteName = "GetApplication";
+
+        public ApplicationsController(IUnitOfWork unitOfWork, ILogger<ApplicationsController> logger, IMapper mapper)
         {
-            _context = context;
+            _unitOfWork = unitOfWork;
+            _logger = logger;
+            _mapper = mapper;
         }
 
-        // GET: api/Applications
+        [Authorize]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Application>>> GetApplications()
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetApplications()
         {
-          if (_context.Applications == null)
-          {
-              return NotFound();
-          }
-            return await _context.Applications.ToListAsync();
+            var applications = await _unitOfWork.Applications.GetAll();
+            var result = _mapper.Map<List<ApplicationDTO>>(applications);
+            return Ok(result);
         }
 
-        // GET: api/Applications/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Application>> GetApplication(string id)
+        [Authorize]
+        [HttpGet("{id}", Name = GetApplicationRouteName)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetApplication(string id)
         {
-          if (_context.Applications == null)
-          {
-              return NotFound();
-          }
-            var application = await _context.Applications.FindAsync(id);
+            var application = await _unitOfWork.Applications.Get(a => a.Id == id, new List<string> { "Interviews" });
+            var result = _mapper.Map<ApplicationDTO>(application);
+            return Ok(result);
+        }
 
+        [Authorize]
+        [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateApplication([FromBody] CreateApplicationDTO applicationDTO)
+        {
+            if(!ModelState.IsValid)
+            {
+                _logger.LogError($"Invalid POST attempt in {nameof(CreateApplication)})");
+                return BadRequest(ModelState);
+            }
+
+            var application = _mapper.Map<Application>(applicationDTO);
+            await _unitOfWork.Applications.Insert(application);
+            await _unitOfWork.Save();
+
+            return CreatedAtRoute(GetApplicationRouteName, new { id = application.Id }, application);
+
+        }
+
+        [Authorize]
+        [HttpPut("{id}")]
+        [ProducesResponseType(StatusCodes.Status202Accepted)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateApplication(string id, [FromBody] UpdateApplicationDTO applicationDTO)
+        {
+            if(!ModelState.IsValid || String.IsNullOrEmpty(id))
+            {
+                return BadRequest(ModelState);
+            }
+
+            var application = await _unitOfWork.Applications.Get(a => a.Id == id);
             if (application == null)
             {
-                return NotFound();
+                return BadRequest("Application not found.");
             }
 
-            return application;
+            application = _mapper.Map<Application>(applicationDTO);
+            _unitOfWork.Applications.Update(application);
+            await _unitOfWork.Save();
+
+            return Accepted(application);
         }
 
-        // PUT: api/Applications/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutApplication(string id, Application application)
-        {
-            if (id != application.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(application).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ApplicationExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        // POST: api/Applications
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Application>> PostApplication(Application application)
-        {
-          if (_context.Applications == null)
-          {
-              return Problem("Entity set 'DataContext.Applications'  is null.");
-          }
-            _context.Applications.Add(application);
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                if (ApplicationExists(application.Id))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return CreatedAtAction(nameof(GetApplication), new { id = application.Id }, application);
-        }
-
-        // DELETE: api/Applications/5
+        [Authorize]
         [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteApplication(string id)
         {
-            if (_context.Applications == null)
+            if(String.IsNullOrEmpty(id))
             {
-                return NotFound();
+                _logger.LogError($"Error in {nameof(DeleteApplication)}");
+                return BadRequest("ID value cannot be empty.");
             }
-            var application = await _context.Applications.FindAsync(id);
+
+            var application = await _unitOfWork.Applications.Get(a => a.Id == id);
             if (application == null)
             {
-                return NotFound();
+                _logger.LogError($"Error in {nameof(DeleteApplication)}");
+                return BadRequest("Application not found.");
             }
 
-            _context.Applications.Remove(application);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.Applications.Delete(id);
+            await _unitOfWork.Save();
 
             return NoContent();
-        }
-
-        private bool ApplicationExists(string id)
-        {
-            return (_context.Applications?.Any(e => e.Id == id)).GetValueOrDefault();
         }
     }
 }

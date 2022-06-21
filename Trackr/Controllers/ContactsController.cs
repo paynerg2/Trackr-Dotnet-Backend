@@ -1,5 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Trackr.Data;
+using Trackr.Interfaces;
 using Trackr.Models;
 
 namespace Trackr.Controllers
@@ -8,125 +11,111 @@ namespace Trackr.Controllers
     [ApiController]
     public class ContactsController : ControllerBase
     {
-        private readonly DataContext _context;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ILogger<ContactsController> _logger;
+        private readonly IMapper _mapper;
 
-        public ContactsController(DataContext context)
+        private const string GetContactRouteName = "GetContact";
+
+        public ContactsController(IUnitOfWork unitOfWork, ILogger<ContactsController> logger, IMapper mapper)
         {
-            _context = context;
+            _unitOfWork = unitOfWork;
+            _logger = logger;
+            _mapper = mapper;
         }
 
-        // GET: api/Contacts
+        [Authorize]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Contact>>> GetContacts()
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetContacts()
         {
-          if (_context.Contacts == null)
-          {
-              return NotFound();
-          }
-            return await _context.Contacts.ToListAsync();
+            var contacts = await _unitOfWork.Contacts.GetAll();
+            var result = _mapper.Map<List<ContactDTO>>(contacts);
+            return Ok(result);
         }
 
-        // GET: api/Contacts/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Contact>> GetContact(string id)
+        [Authorize]
+        [HttpGet("{id}", Name = GetContactRouteName)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetContact(string id)
         {
-          if (_context.Contacts == null)
-          {
-              return NotFound();
-          }
-            var contact = await _context.Contacts.FindAsync(id);
+            var contact = await _unitOfWork.Contacts.Get(c => c.Id == id);
+            var result = _mapper.Map<ContactDTO>(contact);
+            return Ok(result);
+        }
 
+        [Authorize]
+        [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateContact([FromBody] CreateContactDTO contactDTO)
+        {
+            if (!ModelState.IsValid)
+            {
+                _logger.LogError($"Invalid POST attempt in {nameof(CreateContact)})");
+                return BadRequest(ModelState);
+            }
+
+            var contact = _mapper.Map<Contact>(contactDTO);
+            await _unitOfWork.Contacts.Insert(contact);
+            await _unitOfWork.Save();
+
+            return CreatedAtRoute(GetContactRouteName, new { id = contact.Id }, contact);
+
+        }
+
+        [Authorize]
+        [HttpPut("{id}")]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateContact(string id, [FromBody] UpdateContactDTO contactDTO)
+        {
+            if(!ModelState.IsValid || String.IsNullOrEmpty(id))
+            {
+                return BadRequest(ModelState);
+            }
+
+            var contact = await _unitOfWork.Contacts.Get(c => c.Id == id);
             if (contact == null)
             {
-                return NotFound();
+                return BadRequest("Contact not found.");
             }
 
-            return contact;
+            contact = _mapper.Map<Contact>(contactDTO);
+            _unitOfWork.Contacts.Update(contact);
+            await _unitOfWork.Save();
+
+            return Accepted(contact);
         }
 
-        // PUT: api/Contacts/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutContact(string id, Contact contact)
-        {
-            if (id != contact.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(contact).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ContactExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        // POST: api/Contacts
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Contact>> PostContact(Contact contact)
-        {
-          if (_context.Contacts == null)
-          {
-              return Problem("Entity set 'DataContext.Contacts'  is null.");
-          }
-            _context.Contacts.Add(contact);
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                if (ContactExists(contact.Id))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return CreatedAtAction(nameof(GetContact), new { id = contact.Id }, contact);
-        }
-
-        // DELETE: api/Contacts/5
+        [Authorize]
         [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteContact(string id)
         {
-            if (_context.Contacts == null)
+            if (String.IsNullOrEmpty(id))
             {
-                return NotFound();
+                _logger.LogError($"Error in {nameof(DeleteContact)}");
+                return BadRequest("ID value cannot be empty.");
             }
-            var contact = await _context.Contacts.FindAsync(id);
+
+            var contact = await _unitOfWork.Contacts.Get(c => c.Id == id);
             if (contact == null)
             {
-                return NotFound();
+                _logger.LogError($"Error in {nameof(DeleteContact)}");
+                return BadRequest("Contact not found.");
             }
 
-            _context.Contacts.Remove(contact);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.Contacts.Delete(id);
+            await _unitOfWork.Save();
 
             return NoContent();
-        }
-
-        private bool ContactExists(string id)
-        {
-            return (_context.Contacts?.Any(e => e.Id == id)).GetValueOrDefault();
         }
     }
 }

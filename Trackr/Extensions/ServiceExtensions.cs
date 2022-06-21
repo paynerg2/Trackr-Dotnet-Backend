@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using Trackr.Models;
 using static Trackr.Utils.Constants;
 
 namespace Trackr.Extensions
@@ -63,6 +65,29 @@ namespace Trackr.Extensions
                 });
 
                 config.SwaggerDoc("v1", new OpenApiInfo { Title = "Trackr", Version = "v1" });
+            });
+        }
+
+        public static void ConfigureExceptionHandler(this IApplicationBuilder app, ILogger logger)
+        {
+            app.UseExceptionHandler(error =>
+            {
+                error.Run(async context =>
+                {
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                    context.Response.ContentType = "application/json";
+                    var contextFeature = context.Features.Get<IExceptionHandlerFeature>();
+                    if(contextFeature != null)
+                    {
+                        logger.LogError($"Erorr in {contextFeature.Error}");
+
+                        await context.Response.WriteAsync(new Error
+                        {
+                            StatusCode = context.Response.StatusCode,
+                            Message = "Internal Server Error. Please try again."
+                        }.ToString());
+                    }
+                });
             });
         }
     }
