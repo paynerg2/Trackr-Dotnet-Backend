@@ -49,17 +49,12 @@ namespace Trackr.Controllers
 
         [Authorize]
         [HttpPost]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateInterview([FromBody] CreateInterviewDTO interviewDTO)
         {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError($"Invalid POST attempt in {nameof(CreateInterview)})");
-                return BadRequest(ModelState);
-            }
-
             var interview = _mapper.Map<Interview>(interviewDTO);
             await _unitOfWork.Interviews.Insert(interview);
             await _unitOfWork.Save();
@@ -69,16 +64,12 @@ namespace Trackr.Controllers
 
         [Authorize]
         [HttpPut("{id}")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateInterview(string id, [FromBody] UpdateInterviewDTO interviewDTO)
         {
-            if (!ModelState.IsValid || String.IsNullOrEmpty(id))
-            {
-                return BadRequest(ModelState);
-            }
-
             var interview = await _unitOfWork.Interviews.Get(i => i.Id == id);
             if (interview == null)
             {

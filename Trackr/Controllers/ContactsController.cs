@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Trackr.ActionFilters;
 using Trackr.Data;
 using Trackr.Interfaces;
 using Trackr.Models;
@@ -48,17 +49,12 @@ namespace Trackr.Controllers
 
         [Authorize]
         [HttpPost]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateContact([FromBody] CreateContactDTO contactDTO)
         {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError($"Invalid POST attempt in {nameof(CreateContact)})");
-                return BadRequest(ModelState);
-            }
-
             var contact = _mapper.Map<Contact>(contactDTO);
             await _unitOfWork.Contacts.Insert(contact);
             await _unitOfWork.Save();
@@ -69,16 +65,12 @@ namespace Trackr.Controllers
 
         [Authorize]
         [HttpPut("{id}")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateContact(string id, [FromBody] UpdateContactDTO contactDTO)
         {
-            if(!ModelState.IsValid || String.IsNullOrEmpty(id))
-            {
-                return BadRequest(ModelState);
-            }
-
             var contact = await _unitOfWork.Contacts.Get(c => c.Id == id);
             if (contact == null)
             {

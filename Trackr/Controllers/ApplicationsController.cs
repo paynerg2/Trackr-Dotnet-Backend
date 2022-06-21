@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Trackr.ActionFilters;
 using Trackr.Data;
 using Trackr.Interfaces;
 using Trackr.Models;
@@ -49,37 +50,27 @@ namespace Trackr.Controllers
 
         [Authorize]
         [HttpPost]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CreateApplication([FromBody] CreateApplicationDTO applicationDTO)
         {
-            if(!ModelState.IsValid)
-            {
-                _logger.LogError($"Invalid POST attempt in {nameof(CreateApplication)})");
-                return BadRequest(ModelState);
-            }
-
             var application = _mapper.Map<Application>(applicationDTO);
             await _unitOfWork.Applications.Insert(application);
             await _unitOfWork.Save();
 
             return CreatedAtRoute(GetApplicationRouteName, new { id = application.Id }, application);
-
         }
 
         [Authorize]
         [HttpPut("{id}")]
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status202Accepted)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> UpdateApplication(string id, [FromBody] UpdateApplicationDTO applicationDTO)
         {
-            if(!ModelState.IsValid || String.IsNullOrEmpty(id))
-            {
-                return BadRequest(ModelState);
-            }
-
             var application = await _unitOfWork.Applications.Get(a => a.Id == id);
             if (application == null)
             {
