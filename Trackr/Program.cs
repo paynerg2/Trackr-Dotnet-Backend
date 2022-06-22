@@ -1,14 +1,12 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
 using Trackr.ActionFilters;
-using Trackr.Configurations;
+using Trackr.Core.Configurations;
+using Trackr.Core.Services;
 using Trackr.Data;
 using Trackr.Extensions;
 using Trackr.Interfaces;
 using Trackr.Repository;
-using Trackr.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,8 +92,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-var logger = app.Services.GetRequiredService<ILogger>();
-app.ConfigureExceptionHandler(logger);
+app.ConfigureExceptionHandler();
 
 //app.UseHttpsRedirection();
 

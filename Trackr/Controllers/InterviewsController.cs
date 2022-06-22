@@ -2,9 +2,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Trackr.ActionFilters;
+using Trackr.Core.DTOs;
 using Trackr.Data;
 using Trackr.Interfaces;
-using Trackr.Models;
 
 namespace Trackr.Controllers
 {

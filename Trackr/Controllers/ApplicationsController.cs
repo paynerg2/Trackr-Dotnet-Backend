@@ -1,11 +1,10 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Trackr.ActionFilters;
+using Trackr.Core.DTOs;
 using Trackr.Data;
 using Trackr.Interfaces;
-using Trackr.Models;
 
 namespace Trackr.Controllers
 {
@@ -91,7 +90,7 @@ namespace Trackr.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteApplication(string id)
         {
-            if(String.IsNullOrEmpty(id))
+            if (String.IsNullOrEmpty(id))
             {
                 _logger.LogError($"Error in {nameof(DeleteApplication)}");
                 return BadRequest("ID value cannot be empty.");

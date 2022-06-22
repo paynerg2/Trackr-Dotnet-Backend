@@ -1,10 +1,9 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Trackr.Core.DTOs;
 using Trackr.Data;
 using Trackr.Interfaces;
-using Trackr.Models;
 
 namespace Trackr.Controllers
 {
@@ -34,8 +33,8 @@ namespace Trackr.Controllers
         public async Task<IActionResult> Register([FromBody] UserDTO userDTO)
         {
             _logger.LogInformation($"Registration attempt for {userDTO.Email}");
-            
-            if(!ModelState.IsValid)
+
+            if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
@@ -47,7 +46,7 @@ namespace Trackr.Controllers
                 // Automatically hashes and stores password, etc.
                 var result = await _userManager.CreateAsync(user, userDTO.Password);
 
-                if(!result.Succeeded)
+                if (!result.Succeeded)
                 {
                     foreach (var error in result.Errors)
                     {
